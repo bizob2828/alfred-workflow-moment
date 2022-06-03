@@ -18,13 +18,13 @@ import re
 import socket
 import string
 import unicodedata
-import urllib
-import urllib2
-import urlparse
+import urllib.request, urllib.parse, urllib.error
+import urllib.request, urllib.error, urllib.parse
+import urllib.parse
 import zlib
 
 
-USER_AGENT = u'Alfred-Workflow/1.36 (+http://www.deanishe.net/alfred-workflow)'
+USER_AGENT = 'Alfred-Workflow/1.36 (+http://www.deanishe.net/alfred-workflow)'
 
 # Valid characters for multipart form data boundaries
 BOUNDARY_CHARS = string.digits + string.ascii_letters
@@ -87,16 +87,16 @@ def str_dict(dic):
         dic2 = CaseInsensitiveDictionary()
     else:
         dic2 = {}
-    for k, v in dic.items():
-        if isinstance(k, unicode):
+    for k, v in list(dic.items()):
+        if isinstance(k, str):
             k = k.encode('utf-8')
-        if isinstance(v, unicode):
+        if isinstance(v, str):
             v = v.encode('utf-8')
         dic2[k] = v
     return dic2
 
 
-class NoRedirectHandler(urllib2.HTTPRedirectHandler):
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Prevent redirections."""
 
     def redirect_request(self, *args):
@@ -120,7 +120,7 @@ class CaseInsensitiveDictionary(dict):
     def __init__(self, initval=None):
         """Create new case-insensitive dictionary."""
         if isinstance(initval, dict):
-            for key, value in initval.iteritems():
+            for key, value in initval.items():
                 self.__setitem__(key, value)
 
         elif isinstance(initval, list):
@@ -147,7 +147,7 @@ class CaseInsensitiveDictionary(dict):
 
     def update(self, other):
         """Update values from other ``dict``."""
-        for k, v in other.items():
+        for k, v in list(other.items()):
             self[k] = v
 
     def items(self):
@@ -220,8 +220,8 @@ class Response(object):
 
         # Execute query
         try:
-            self.raw = urllib2.urlopen(request)
-        except urllib2.HTTPError as err:
+            self.raw = urllib.request.urlopen(request)
+        except urllib.error.HTTPError as err:
             self.error = err
             try:
                 self.url = err.geturl()
@@ -242,7 +242,7 @@ class Response(object):
             headers = self.raw.info()
             self.transfer_encoding = headers.getencoding()
             self.mimetype = headers.gettype()
-            for key in headers.keys():
+            for key in list(headers.keys()):
                 self.headers[key.lower()] = headers.get(key)
 
             # Is content gzipped?
@@ -327,7 +327,7 @@ class Response(object):
 
         """
         if self.encoding:
-            return unicodedata.normalize('NFC', unicode(self.content,
+            return unicodedata.normalize('NFC', str(self.content,
                                                         self.encoding))
         return self.content
 
@@ -519,14 +519,14 @@ def request(method, url, params=None, data=None, headers=None, cookies=None,
 
     if auth is not None:  # Add authorisation handler
         username, password = auth
-        password_manager = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        password_manager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
         password_manager.add_password(None, url, username, password)
-        auth_manager = urllib2.HTTPBasicAuthHandler(password_manager)
+        auth_manager = urllib.request.HTTPBasicAuthHandler(password_manager)
         openers.append(auth_manager)
 
     # Install our custom chain of openers
-    opener = urllib2.build_opener(*openers)
-    urllib2.install_opener(opener)
+    opener = urllib.request.build_opener(*openers)
+    urllib.request.install_opener(opener)
 
     if not headers:
         headers = CaseInsensitiveDictionary()
@@ -554,28 +554,28 @@ def request(method, url, params=None, data=None, headers=None, cookies=None,
         new_headers, data = encode_multipart_formdata(data, files)
         headers.update(new_headers)
     elif data and isinstance(data, dict):
-        data = urllib.urlencode(str_dict(data))
+        data = urllib.parse.urlencode(str_dict(data))
 
     # Make sure everything is encoded text
     headers = str_dict(headers)
 
-    if isinstance(url, unicode):
+    if isinstance(url, str):
         url = url.encode('utf-8')
 
     if params:  # GET args (POST args are handled in encode_multipart_formdata)
 
-        scheme, netloc, path, query, fragment = urlparse.urlsplit(url)
+        scheme, netloc, path, query, fragment = urllib.parse.urlsplit(url)
 
         if query:  # Combine query string and `params`
-            url_params = urlparse.parse_qs(query)
+            url_params = urllib.parse.parse_qs(query)
             # `params` take precedence over URL query string
             url_params.update(params)
             params = url_params
 
-        query = urllib.urlencode(str_dict(params), doseq=True)
-        url = urlparse.urlunsplit((scheme, netloc, path, query, fragment))
+        query = urllib.parse.urlencode(str_dict(params), doseq=True)
+        url = urllib.parse.urlunsplit((scheme, netloc, path, query, fragment))
 
-    req = urllib2.Request(url, data, headers)
+    req = urllib.request.Request(url, data, headers)
     return Response(req, stream)
 
 
@@ -644,10 +644,10 @@ def encode_multipart_formdata(fields, files):
     output = []
 
     # Normal form fields
-    for (name, value) in fields.items():
-        if isinstance(name, unicode):
+    for (name, value) in list(fields.items()):
+        if isinstance(name, str):
             name = name.encode('utf-8')
-        if isinstance(value, unicode):
+        if isinstance(value, str):
             value = value.encode('utf-8')
         output.append('--' + boundary)
         output.append('Content-Disposition: form-data; name="%s"' % name)
@@ -655,18 +655,18 @@ def encode_multipart_formdata(fields, files):
         output.append(value)
 
     # Files to upload
-    for name, d in files.items():
-        filename = d[u'filename']
-        content = d[u'content']
-        if u'mimetype' in d:
-            mimetype = d[u'mimetype']
+    for name, d in list(files.items()):
+        filename = d['filename']
+        content = d['content']
+        if 'mimetype' in d:
+            mimetype = d['mimetype']
         else:
             mimetype = get_content_type(filename)
-        if isinstance(name, unicode):
+        if isinstance(name, str):
             name = name.encode('utf-8')
-        if isinstance(filename, unicode):
+        if isinstance(filename, str):
             filename = filename.encode('utf-8')
-        if isinstance(mimetype, unicode):
+        if isinstance(mimetype, str):
             mimetype = mimetype.encode('utf-8')
         output.append('--' + boundary)
         output.append('Content-Disposition: form-data; '
